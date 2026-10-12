@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 
+const VERSION = '0.4.0';
 const BASE_URL = process.env.BASE_URL || 'https://presa-seo-console.vercel.app';
 const REDIRECT_URI = `${BASE_URL}/auth/google/callback`;
 const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
@@ -14,7 +15,9 @@ const PRIORITY_KEYWORDS = [
   { group: 'PU / ISC', keyword: 'best pu college in karnataka', targetUrl: 'https://smis.edu.in/best-pu-colleges-in-karnataka/', intent: 'commercial' },
   { group: 'PU / ISC', keyword: 'best pu colleges in karnataka', targetUrl: 'https://smis.edu.in/best-pu-colleges-in-karnataka/', intent: 'commercial' },
   { group: 'PU / ISC', keyword: 'best pu college in karnataka for science', targetUrl: 'https://smis.edu.in/best-pu-colleges-in-karnataka/', intent: 'commercial' },
-  { group: 'PU / ISC', keyword: "st mary's pu college chikmagalur", targetUrl: 'https://smis.edu.in/best-pu-college-in-chikmagalur-for-science/', intent: 'brand-commercial' },
+  { group: 'PU / ISC', keyword: 'best science college in karnataka', targetUrl: 'https://smis.edu.in/best-pu-colleges-in-karnataka/', intent: 'commercial' },
+  { group: 'PU / ISC', keyword: "st mary's pu college chikmagalur", targetUrl: 'https://smis.edu.in/st-marys-pu-college/', intent: 'brand-commercial' },
+  { group: 'PU / ISC', keyword: 'best pu college in chikmagalur for science', targetUrl: 'https://smis.edu.in/best-pu-college-in-chikmagalur-for-science/', intent: 'commercial' },
   { group: 'NEET', keyword: 'best neet coaching in karnataka', targetUrl: 'https://smis.edu.in/best-neet-coaching-in-karnataka/', intent: 'commercial' },
   { group: 'NEET', keyword: 'best neet long term coaching in karnataka', targetUrl: 'https://smis.edu.in/best-neet-long-term-coaching-2026-27/', intent: 'commercial' },
   { group: 'NEET', keyword: 'neet long term', targetUrl: 'https://smis.edu.in/best-neet-long-term-coaching-2026-27/', intent: 'commercial' },
@@ -132,7 +135,13 @@ function groupCannibalization(rows, { minImpressions = 20, minPageImpressions = 
     const page = String(r.keys?.[1] || '').trim();
     if (!query || !page) continue;
     if (!grouped.has(query)) grouped.set(query, []);
-    grouped.get(query).push({ page, clicks: r.clicks || 0, impressions: r.impressions || 0, ctr: r.ctr || 0, position: r.position ?? null });
+    grouped.get(query).push({
+      page,
+      clicks: r.clicks || 0,
+      impressions: r.impressions || 0,
+      ctr: r.ctr || 0,
+      position: r.position ?? null
+    });
   }
   const out = [];
   for (const [query, pagesRaw] of grouped) {
@@ -157,8 +166,152 @@ function groupCannibalization(rows, { minImpressions = 20, minPageImpressions = 
   return out.sort((a, b) => b.totalImpressions - a.totalImpressions);
 }
 
+async function buildPriorityReport(args) {
+  const [currentQueries, previousQueries, baselineQueries, currentQueryPages] = await Promise.all([
+    queryGsc({ siteUrl: args.siteUrl, startDate: args.currentStart, endDate: args.currentEnd, dimensions: ['query'], rowLimit: 25000 }),
+    queryGsc({ siteUrl: args.siteUrl, startDate: args.previousStart, endDate: args.previousEnd, dimensions: ['query'], rowLimit: 25000 }),
+    queryGsc({ siteUrl: args.siteUrl, startDate: args.baselineStart, endDate: args.baselineEnd, dimensions: ['query'], rowLimit: 25000 }),
+    queryGsc({ siteUrl: args.siteUrl, startDate: args.currentStart, endDate: args.currentEnd, dimensions: ['query', 'page'], rowLimit: 25000 })
+  ]);
+
+  const currentMap = rowMap(currentQueries);
+  const previousMap = rowMap(previousQueries);
+  const baselineMap = rowMap(baselineQueries);
+  const pageMap = new Map();
+
+  for (const r of currentQueryPages) {
+    const keyword = String(r.keys?.[0] || '').toLowerCase();
+    const page = String(r.keys?.[1] || '');
+    if (!pageMap.has(keyword)) pageMap.set(keyword, []);
+    pageMap.get(keyword).push({
+      page,
+      clicks: r.clicks || 0,
+      impressions: r.impressions || 0,
+      ctr: r.ctr || 0,
+      position: r.position ?? null
+    });
+  }
+
+  const metric = r => ({
+    clicks: r?.clicks || 0,
+    impressions: r?.impressions || 0,
+    ctr: r?.ctr || 0,
+    position: r?.position ?? null
+  });
+
+  return PRIORITY_KEYWORDS.map(item => {
+    const key = item.keyword.toLowerCase();
+    const current = metric(currentMap.get(key));
+    const previous = metric(previousMap.get(key));
+    const baseline = metric(baselineMap.get(key));
+    const pages = (pageMap.get(key) || []).sort((a, b) => b.impressions - a.impressions);
+    const target = normalizePage(item.targetUrl);
+    const targetRow = pages.find(p => normalizePage(p.page) === target) || null;
+    const winningUrl = pages[0]?.page || null;
+    return {
+      ...item,
+      current,
+      previous,
+      baseline,
+      changes: {
+        vsPrevious: {
+          clicks: metricChange(current.clicks, previous.clicks),
+          impressions: metricChange(current.impressions, previous.impressions),
+          ctr: metricChange(current.ctr, previous.ctr),
+          position: metricChange(current.position ?? 0, previous.position ?? 0)
+        },
+        vsBaseline: {
+          clicks: metricChange(current.clicks, baseline.clicks),
+          impressions: metricChange(current.impressions, baseline.impressions),
+          ctr: metricChange(current.ctr, baseline.ctr),
+          position: metricChange(current.position ?? 0, baseline.position ?? 0)
+        }
+      },
+      rankingUrls: pages,
+      targetUrlSeen: Boolean(targetRow),
+      targetUrlMetrics: targetRow,
+      winningUrl,
+      winningUrlMatchesTarget: winningUrl ? normalizePage(winningUrl) === target : false
+    };
+  });
+}
+
+function actionFromKeyword(item) {
+  const actions = [];
+  const impressions = item.current.impressions || 0;
+  const pos = item.current.position;
+  const pages = item.rankingUrls || [];
+  const previousImpressions = item.previous.impressions || 0;
+
+  if (impressions === 0 && previousImpressions > 0) {
+    actions.push({
+      type: 'visibility-loss',
+      priority: 98,
+      action: 'Recover lost visibility',
+      reason: `No current impressions after ${previousImpressions} in the previous period.`
+    });
+  }
+
+  if (impressions > 0 && !item.targetUrlSeen) {
+    actions.push({
+      type: 'wrong-url',
+      priority: 96,
+      action: 'Route this keyword to the approved target URL',
+      reason: `Google is showing ${pages.length || 1} other URL(s), but the approved target was not seen.`
+    });
+  } else if (impressions > 0 && item.targetUrlSeen && !item.winningUrlMatchesTarget) {
+    actions.push({
+      type: 'wrong-url-winning',
+      priority: 92,
+      action: 'Strengthen the approved target and reduce competing intent',
+      reason: `The approved target appears, but ${item.winningUrl} currently wins more impressions.`
+    });
+  }
+
+  const meaningfulPages = pages.filter(p => (p.impressions || 0) >= 2);
+  if (meaningfulPages.length >= 2) {
+    const total = meaningfulPages.reduce((s, p) => s + p.impressions, 0);
+    const dominantShare = total ? meaningfulPages[0].impressions / total : 1;
+    if (dominantShare < 0.8) {
+      actions.push({
+        type: 'cannibalization',
+        priority: dominantShare < 0.6 ? 94 : 86,
+        action: 'Consolidate internal linking and on-page intent',
+        reason: `${meaningfulPages.length} URLs share meaningful impressions; dominant URL share is ${(dominantShare * 100).toFixed(1)}%.`
+      });
+    }
+  }
+
+  if (pos != null && pos > 10 && pos <= 20) {
+    actions.push({
+      type: 'page-two',
+      priority: 90,
+      action: 'Push this Page 2 keyword into the Top 10',
+      reason: `Average position is ${pos.toFixed(2)}.`
+    });
+  } else if (pos != null && pos >= 4 && pos <= 10) {
+    actions.push({
+      type: 'page-one-growth',
+      priority: 78,
+      action: 'Strengthen this Page 1 keyword toward Top 3',
+      reason: `Average position is ${pos.toFixed(2)}.`
+    });
+  }
+
+  if (impressions >= 10 && item.current.ctr < 0.02) {
+    actions.push({
+      type: 'ctr',
+      priority: 72,
+      action: 'Improve title/meta snippet and intent match',
+      reason: `CTR is ${(item.current.ctr * 100).toFixed(2)}% across ${impressions} impressions.`
+    });
+  }
+
+  return actions;
+}
+
 function makeMcp() {
-  const mcp = new McpServer({ name: 'Presa SEO Console', version: '0.3.0' });
+  const mcp = new McpServer({ name: 'Presa SEO Console', version: VERSION });
 
   mcp.tool('list_sites', 'List Google Search Console properties available to the connected account.', {}, async () => {
     const sc = google.searchconsole({ version: 'v1', auth: await authFromStore() });
@@ -266,55 +419,7 @@ function makeMcp() {
     previousStart: z.string(), previousEnd: z.string(),
     baselineStart: z.string(), baselineEnd: z.string()
   }, async args => {
-    const [currentQueries, previousQueries, baselineQueries, currentQueryPages] = await Promise.all([
-      queryGsc({ siteUrl: args.siteUrl, startDate: args.currentStart, endDate: args.currentEnd, dimensions: ['query'], rowLimit: 25000 }),
-      queryGsc({ siteUrl: args.siteUrl, startDate: args.previousStart, endDate: args.previousEnd, dimensions: ['query'], rowLimit: 25000 }),
-      queryGsc({ siteUrl: args.siteUrl, startDate: args.baselineStart, endDate: args.baselineEnd, dimensions: ['query'], rowLimit: 25000 }),
-      queryGsc({ siteUrl: args.siteUrl, startDate: args.currentStart, endDate: args.currentEnd, dimensions: ['query', 'page'], rowLimit: 25000 })
-    ]);
-    const currentMap = rowMap(currentQueries);
-    const previousMap = rowMap(previousQueries);
-    const baselineMap = rowMap(baselineQueries);
-    const pageMap = new Map();
-    for (const r of currentQueryPages) {
-      const keyword = String(r.keys?.[0] || '').toLowerCase();
-      const page = String(r.keys?.[1] || '');
-      if (!pageMap.has(keyword)) pageMap.set(keyword, []);
-      pageMap.get(keyword).push({ page, clicks: r.clicks || 0, impressions: r.impressions || 0, ctr: r.ctr || 0, position: r.position ?? null });
-    }
-    const metric = r => ({ clicks: r?.clicks || 0, impressions: r?.impressions || 0, ctr: r?.ctr || 0, position: r?.position ?? null });
-    const report = PRIORITY_KEYWORDS.map(item => {
-      const key = item.keyword.toLowerCase();
-      const current = metric(currentMap.get(key));
-      const previous = metric(previousMap.get(key));
-      const baseline = metric(baselineMap.get(key));
-      const pages = (pageMap.get(key) || []).sort((a, b) => b.impressions - a.impressions);
-      const target = normalizePage(item.targetUrl);
-      const targetRow = pages.find(p => normalizePage(p.page) === target) || null;
-      return {
-        ...item,
-        current,
-        previous,
-        baseline,
-        changes: {
-          vsPrevious: {
-            clicks: metricChange(current.clicks, previous.clicks),
-            impressions: metricChange(current.impressions, previous.impressions),
-            ctr: metricChange(current.ctr, previous.ctr),
-            position: metricChange(current.position ?? 0, previous.position ?? 0)
-          },
-          vsBaseline: {
-            clicks: metricChange(current.clicks, baseline.clicks),
-            impressions: metricChange(current.impressions, baseline.impressions),
-            ctr: metricChange(current.ctr, baseline.ctr),
-            position: metricChange(current.position ?? 0, baseline.position ?? 0)
-          }
-        },
-        rankingUrls: pages,
-        targetUrlSeen: Boolean(targetRow),
-        targetUrlMetrics: targetRow
-      };
-    });
+    const report = await buildPriorityReport(args);
     return { content: [{ type: 'text', text: JSON.stringify(report, null, 2) }] };
   });
 
@@ -366,14 +471,51 @@ function makeMcp() {
     return { content: [{ type: 'text', text: JSON.stringify(report, null, 2) }] };
   });
 
+  mcp.tool('seo_action_plan', 'Turn the priority keyword report into a ranked action queue for routing, cannibalization, Page 2 wins, Page 1 growth and CTR fixes.', {
+    siteUrl: z.string(),
+    currentStart: z.string(), currentEnd: z.string(),
+    previousStart: z.string(), previousEnd: z.string(),
+    baselineStart: z.string(), baselineEnd: z.string(),
+    limit: z.number().int().min(1).max(100).default(25)
+  }, async args => {
+    const report = await buildPriorityReport(args);
+    const queue = [];
+    for (const item of report) {
+      for (const a of actionFromKeyword(item)) {
+        queue.push({
+          priority: a.priority,
+          group: item.group,
+          keyword: item.keyword,
+          targetUrl: item.targetUrl,
+          current: item.current,
+          previous: item.previous,
+          winningUrl: item.winningUrl,
+          targetUrlSeen: item.targetUrlSeen,
+          type: a.type,
+          action: a.action,
+          reason: a.reason
+        });
+      }
+    }
+    queue.sort((a, b) => b.priority - a.priority || b.current.impressions - a.current.impressions);
+    return { content: [{ type: 'text', text: JSON.stringify({
+      generatedFor: {
+        current: { startDate: args.currentStart, endDate: args.currentEnd },
+        previous: { startDate: args.previousStart, endDate: args.previousEnd },
+        baseline: { startDate: args.baselineStart, endDate: args.baselineEnd }
+      },
+      actions: queue.slice(0, args.limit)
+    }, null, 2) }] };
+  });
+
   return mcp;
 }
 
 export default async function handler(req, res) {
   const url = new URL(req.url, BASE_URL);
   const path = url.pathname;
-  if (req.method === 'GET' && path === '/') return res.status(200).json({ name: 'Presa SEO Console', status: 'ok', version: '0.3.0', mcp: '/mcp', googleConnect: '/auth/google' });
-  if (req.method === 'GET' && path === '/health') return res.status(200).json({ ok: true, version: '0.3.0', storage: !!process.env.BLOB_READ_WRITE_TOKEN });
+  if (req.method === 'GET' && path === '/') return res.status(200).json({ name: 'Presa SEO Console', status: 'ok', version: VERSION, mcp: '/mcp', googleConnect: '/auth/google' });
+  if (req.method === 'GET' && path === '/health') return res.status(200).json({ ok: true, version: VERSION, storage: !!process.env.BLOB_READ_WRITE_TOKEN });
   if (req.method === 'GET' && path === '/auth/google') {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) return res.status(503).send('Google OAuth credentials are not configured.');
     const target = oauthClient().generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: [SCOPE], state: crypto.randomBytes(24).toString('hex') });
