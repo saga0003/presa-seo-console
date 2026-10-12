@@ -13,15 +13,36 @@ Google Search Console API → Presa SEO Console MCP → ChatGPT Plugin.
 - `search_performance`
 - `keyword_performance`
 - `find_opportunities`
+- `compare_periods`
+- `monthly_trend`
+- `query_pages`
+- `page_queries`
+- `detect_cannibalization`
+- `keyword_registry`
+- `priority_keyword_report`
+- `seo_daily_brief`
 
-More analysis tools will be added after the live Google connection is verified.
+## Phase 1: SEO Command Centre
+Phase 1 turns raw Search Console data into an operational SEO control layer for St. Mary’s.
+
+It tracks:
+- current vs previous-period performance
+- monthly trends
+- priority commercial keywords
+- the intended canonical landing page for each priority keyword
+- ranking URL mismatches
+- keyword cannibalization
+- page-one / page-two opportunities
+- ranking gains and losses
+- CTR and impression opportunities
+
+The approved St. Mary’s keyword-to-target-page map is currently maintained in `api/index.js` and exposed through the `keyword_registry` MCP tool.
 
 ## Security
-OAuth secrets and refresh tokens are environment variables only. Never commit `.env` files or credentials.
+Google OAuth client credentials stay in Vercel environment variables. The Google refresh token is stored in a private Vercel Blob object and is never committed to the repository.
+
+The Search Console scope is read-only:
+`https://www.googleapis.com/auth/webmasters.readonly`
 
 ## Google OAuth callback
 `{BASE_URL}/auth/google/callback`
-
-## Scope
-The application requests only the read-only Search Console scope:
-`https://www.googleapis.com/auth/webmasters.readonly`
