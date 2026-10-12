@@ -1,4 +1,5 @@
 {
+  "buildCommand": "node scripts/enable-phase2.mjs",
   "rewrites": [
     { "source": "/", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
