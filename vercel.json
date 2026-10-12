@@ -4,6 +4,7 @@
     { "source": "/health", "destination": "/api" },
     { "source": "/auth/google", "destination": "/api" },
     { "source": "/auth/google/callback", "destination": "/api" },
+    { "source": "/auth/status", "destination": "/api" },
     { "source": "/mcp", "destination": "/api" }
   ],
   "functions": {
