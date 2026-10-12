@@ -25,4 +25,6 @@ source = source.replace(
 );
 
 fs.writeFileSync(path, source);
+fs.mkdirSync('public', { recursive: true });
+fs.writeFileSync('public/.phase2-build', 'Presa SEO Console Phase 2 build\n');
 console.log('Phase 2 MCP tools enabled for build.');
