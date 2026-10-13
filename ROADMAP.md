@@ -1,10 +1,10 @@
 # Presa SEO Console — Roadmap & Progress
 
-Updated: 12 Oct 2026
+Updated: 14 Oct 2026
 
 ## Overall status
 
-Estimated weighted implementation progress: **46% complete / 54% pending**.
+Estimated weighted implementation progress: **57% complete / 43% pending**.
 
 This is weighted by engineering/content effort rather than simple phase count.
 
@@ -15,15 +15,15 @@ This is weighted by engineering/content effort rather than simple phase count.
 | 1 | SEO Command Centre, routing, baselines, cannibalization, action engine | 16% | Complete; Google recrawl validation continues | 100% |
 | 2 | Competitor Radar: editable registry + dynamic SERP top 3 + public page/sitemap monitoring | 12% | Complete | 100% |
 | 3 | NEET Resource Library platform + PYQ information architecture + QA/indexation controls | 18% | Engineering complete; verified historical question corpus rollout active | 55% |
-| 4 | Search-demand content engine | 12% | Early content + GSC opportunity signals | 15% |
+| 4 | Search-demand content engine | 12% | Production system complete in v0.7.0 | 100% |
 | 5 | Interactive tools: PYQ practice, diagnostics, mock tests, calculators | 13% | Very early / existing mock-test assets | 5% |
 | 6 | JEE + KCET expansion | 7% | Existing JEE SEO assets, system not generalized yet | 10% |
 | 7 | Conversion layer: resource → counselling → scholarship/campus/admission | 8% | Basic CTAs and lead paths exist | 15% |
 | 8 | Evidence Marketing / Claim Vault | 5% | Rules defined; first claim cleanup started | 10% |
-| 9 | Daily SEO Autopilot | 5% | Daily brief + ranked action queue + daily competitor radar | 55% |
+| 9 | Daily SEO Autopilot | 5% | Daily brief + ranked action queue + competitor radar + search-demand plan | 60% |
 | 10 | Authority / AEO / GEO / AI Overview optimization | 4% | Citation-ready page work started | 20% |
 
-Weighted total ≈ 46%.
+Weighted total ≈ 57%.
 
 ## Phase 1 — Complete
 
@@ -42,13 +42,13 @@ Google recrawl/impression-share validation is ongoing measurement, not unfinishe
 
 ## Phase 2 — Complete
 
-Presa SEO Console v0.5+ now supports:
+Presa SEO Console v0.5+ supports:
 - persistent editable competitor registry
 - add/update/remove any competitor without code changes
 - seeded ALLEN, Aakash, Physics Wallah, NEETprep and Vedantu
 - live-search snapshot storage
 - first 3 distinct non-SMIS organic domains treated as dynamic competitors per keyword
-- public competitor page analysis: title, meta, H1-H3, content depth, internal/external links, schema, freshness signals and page-change diff
+- public competitor page analysis: title, meta, H1-H3, content depth, links, schema, freshness signals and page-change diff
 - public robots/sitemap discovery
 - new/updated URL detection
 - emerging public topic themes
@@ -71,18 +71,48 @@ Presa SEO Console v0.6.0 adds a persistent NEET resource engine with:
 - page blueprints and indexation rules
 - private Vercel Blob persistence
 
-Public website foundation created:
+Public website foundation:
 - `https://smis.edu.in/neet/`
 - `https://smis.edu.in/neet/previous-year-question-papers/`
 
-The current hub links to existing St. Mary’s NEET question-paper/model-paper/simulation resources. Historical year/subject/question URLs are intentionally not mass-published until verified questions and original solutions are available; publishing empty placeholders would create thin content.
+The platform and information architecture are complete. The remaining Phase 3 workload is corpus production: ingesting, verifying and solving historical questions before publication through the quality gate.
 
-### Remaining Phase 3 corpus work
+### Resource-page design correction — 14 Oct 2026
 
-The platform and information architecture are complete. To make Phase 3 fully complete as a content corpus, verified NEET historical questions/official sources from 2014–2026 still need to be ingested, solved/reviewed and then published through the quality gate. This is a content-production workload, not a missing system capability.
+The first public resource pages exposed an implementation problem: plain raw HTML in WordPress was passed through automatic paragraph formatting, which damaged card/link markup and contributed to inconsistent typography and spacing. Both resource pages were rebuilt as Gutenberg Custom HTML blocks with scoped CSS and a consistent mobile-first design system.
+
+Mandatory standards for future generated pages are now encoded in Phase 4's `page_design_system` tool:
+- St. Mary’s palette: #C80000 / #131E35 / neutral greys
+- system typography with controlled responsive hierarchy
+- full-width hero + readable max-width content
+- clean mobile collapse at 390px; no horizontal overflow
+- custom authored HTML must use a Gutenberg Custom HTML block so `wpautop` cannot corrupt structure
+- hide duplicate theme title strips when the authored page already owns the H1
+- inactive resources are status-labelled, never presented as fake/broken links
+- strong contrast, practical tap targets and semantic heading hierarchy
+- explicit visual-QA checklist before a page is considered complete
+
+## Phase 4 — Complete
+
+Presa SEO Console v0.7.0 adds the production search-demand content engine:
+- `content_registry`: persistent canonical content/keyword ownership registry
+- `upsert_content_item`: controlled production state from idea → brief → draft → review → approved → published → measure
+- `content_demand_radar`: real GSC query scoring with previous-period comparison
+- login/portal navigation-noise filtering
+- intent and topic-cluster classification for NEET, JEE, PU/ISC, schools and cutoffs
+- existing-page/resource matching before recommending a new URL
+- opportunity scoring based on impressions, ranking proximity, CTR, growth and coverage gap
+- `content_gap_queue`: surfaces weak/unowned search demand
+- `content_brief`: answer-led SEO/AEO brief generation with stored dynamic competitor context
+- `page_design_system`: mandatory visual/mobile/WordPress production guardrails
+- `content_measurement`: post-publication query/page measurement against comparable periods
+- `phase4_daily_plan`: ranked daily production queue with an explicit anti-thin-page rule
+- recurring daily St. Mary’s Search Demand Plan workflow
+
+Phase 4 follows one core rule: **upgrade or consolidate an existing authoritative URL before creating a new page; create a new URL only for genuinely distinct intent with substantial original value.**
 
 ## Next priority
 
-1. Populate the verified NEET PYQ corpus through the Phase 3 ingestion/QA workflow.
-2. Phase 4: turn GSC + competitor + library gaps into a controlled content production queue.
-3. Phase 5: add interactive attempt/test mode on top of the verified question library.
+1. Continue populating the verified NEET PYQ corpus through the Phase 3 ingestion/QA workflow.
+2. Phase 5: interactive attempt/test mode on top of the verified question library.
+3. Generalize the resource/content engine to JEE + KCET in Phase 6.
