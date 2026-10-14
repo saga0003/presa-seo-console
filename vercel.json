@@ -1,12 +1,13 @@
 {
-  "buildCommand": "node scripts/enable-phase2.mjs",
+  "buildCommand": "node scripts/enable-phase5.mjs",
   "rewrites": [
     { "source": "/", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
     { "source": "/auth/google", "destination": "/api" },
     { "source": "/auth/google/callback", "destination": "/api" },
     { "source": "/auth/status", "destination": "/api" },
-    { "source": "/mcp", "destination": "/api" }
+    { "source": "/mcp", "destination": "/api" },
+    { "source": "/practice-api/:path*", "destination": "/api" }
   ],
   "functions": {
     "api/index.js": { "maxDuration": 60 }
